@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GameLoop – Drei Demo-Konzepte</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0e0f14;
+  --surface: #16181f;
+  --surface2: #1e2029;
+  --border: rgba(255,255,255,0.07);
+  --text: #f0f0f5;
+  --muted: #7a7d8e;
+  --coin: #f5c842;
+  --coin-dim: #7a6420;
+
+  --c1: #7c6aff;   /* Schatzkiste – Violett */
+  --c1d: #3d2fa8;
+  --c2: #22d3a0;   /* Fortschritt – Türkis */
+  --c2d: #0d6b50;
+  --c3: #ff6b35;   /* Upgrade – Orange */
+  --c3d: #7a2e10;
+}
+
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+/* HEADER */
+.site-header { padding: 28px 40px 0; text-align: center; }
+.site-header h1 { font-size: 13px; letter-spacing: 4px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.site-header p { font-size: 28px; font-weight: 700; color: var(--text); }
+
+/* COIN BALANCE */
+.balance-bar { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 20px 0 0; }
+.coin-icon { font-size: 20px; }
+.balance-num { font-size: 22px; font-weight: 700; color: var(--coin); font-variant-numeric: tabular-nums; }
+.balance-label { font-size: 13px; color: var(--muted); }
+.refill-btn { background: var(--coin-dim); color: var(--coin); border: none; padding: 5px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; font-weight: 600; margin-left: 8px; }
+.refill-btn:hover { background: var(--coin); color: #1a0d00; }
+
+/* TABS */
+.tabs { display: flex; justify-content: center; gap: 6px; margin: 28px 40px 0; }
+.tab { flex: 1; max-width: 260px; padding: 14px 20px; border-radius: 12px 12px 0 0; border: 1px solid var(--border); border-bottom: none; background: var(--surface); color: var(--muted); cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s; text-align: center; }
+.tab:hover { color: var(--text); }
+.tab.active-1 { background: var(--c1d); color: #c4b8ff; border-color: var(--c1); }
+.tab.active-2 { background: var(--c2d); color: #a0f5de; border-color: var(--c2); }
+.tab.active-3 { background: var(--c3d); color: #ffc4a0; border-color: var(--c3); }
+.tab.active-4 { background: #1a2a1a; color: #a0f5a0; border-color: var(--coin); }
+.tab-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+.tab-dot-1 { background: var(--c1); }
+.tab-dot-2 { background: var(--c2); }
+.tab-dot-3 { background: var(--c3); }
+.tab-dot-4 { background: var(--coin); }
+
+/* PANELS */
+.panels { margin: 0 40px 40px; border: 1px solid var(--border); border-radius: 0 0 16px 16px; background: var(--surface); padding: 32px; min-height: 520px; }
+.panel { display: none; }
+.panel.visible { display: block; }
+
+/* ───────────────────────────────────────────
+   PANEL 1 – SCHATZKISTE
+─────────────────────────────────────────── */
+.p1-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+
+.chest-zone { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+.chest-visual { position: relative; cursor: pointer; user-select: none; }
+.chest-img { font-size: 100px; transition: transform 0.15s; display: block; text-align: center; filter: drop-shadow(0 0 24px rgba(124,106,255,0.4)); }
+.chest-visual:hover .chest-img { transform: scale(1.05) rotate(-2deg); }
+.chest-visual.shaking .chest-img { animation: shake 0.4s ease; }
+@keyframes shake { 0%,100%{transform:rotate(0)} 20%{transform:rotate(-8deg) scale(1.05)} 40%{transform:rotate(8deg) scale(1.07)} 60%{transform:rotate(-5deg) scale(1.05)} 80%{transform:rotate(5deg)} }
+.chest-visual.opening .chest-img { animation: openChest 0.6s ease forwards; }
+@keyframes openChest { 0%{transform:scale(1)} 30%{transform:scale(1.15) rotate(-3deg)} 60%{transform:scale(0.9) rotate(2deg)} 100%{transform:scale(1) rotate(0)} }
+
+.chest-info { background: var(--surface2); border-radius: 12px; padding: 14px 20px; width: 100%; text-align: center; }
+.chest-info-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+.chest-info-row:last-child { margin: 0; }
+.chest-info-label { color: var(--muted); }
+.chest-info-val { color: var(--coin); font-weight: 700; }
+
+.chest-selector { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.chest-opt { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; }
+.chest-opt:hover { border-color: var(--c1); color: var(--c1); }
+.chest-opt.sel { border-color: var(--c1); background: rgba(124,106,255,0.15); color: var(--c1); }
+
+.chest-open-btn { width: 100%; padding: 14px; border-radius: 12px; background: var(--c1); color: white; border: none; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+.chest-open-btn:hover { background: #9a8bff; }
+.chest-open-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Items reveal */
+.items-zone h3 { font-size: 15px; font-weight: 600; color: var(--muted); margin-bottom: 16px; }
+.items-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.item-card { background: var(--surface2); border-radius: 10px; padding: 14px; border: 1px solid var(--border); text-align: center; transition: all 0.3s; }
+.item-card.revealed { border-color: var(--c1); animation: popIn 0.4s ease; }
+@keyframes popIn { 0%{transform:scale(0.7);opacity:0} 80%{transform:scale(1.05)} 100%{transform:scale(1);opacity:1} }
+.item-emoji { font-size: 32px; margin-bottom: 6px; }
+.item-name { font-size: 12px; color: var(--text); margin-bottom: 4px; font-weight: 600; }
+.item-rarity { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.item-rarity.rare { color: #a78bfa; }
+.item-rarity.epic { color: #f59e0b; }
+.item-val { font-size: 13px; color: var(--coin); font-weight: 700; }
+.item-card.hidden { opacity: 0.15; }
+
+.total-row { margin-top: 16px; background: var(--surface2); border-radius: 10px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); }
+.total-row span { color: var(--muted); font-size: 13px; }
+.total-row strong { color: var(--coin); font-size: 18px; }
+
+/* ───────────────────────────────────────────
+   PANEL 2 – FORTSCHRITTSRAD
+─────────────────────────────────────────── */
+.p2-layout { display: grid; grid-template-columns: 1fr 1.4fr; gap: 32px; align-items: start; }
+
+.progress-zone { display: flex; flex-direction: column; gap: 16px; }
+.prog-total { background: var(--surface2); border-radius: 12px; padding: 18px; text-align: center; }
+.prog-total-num { font-size: 42px; font-weight: 700; color: var(--c2); font-variant-numeric: tabular-nums; }
+.prog-total-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; }
+
+.prog-bar-wrap { background: var(--surface2); border-radius: 12px; padding: 18px; }
+.prog-bar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.prog-bar-header span { font-size: 13px; color: var(--muted); }
+.prog-bar-header strong { font-size: 13px; color: var(--c2); }
+.prog-bar-track { height: 14px; background: rgba(34,211,160,0.1); border-radius: 7px; overflow: hidden; }
+.prog-bar-fill { height: 100%; background: var(--c2); border-radius: 7px; transition: width 0.5s cubic-bezier(.34,1.56,.64,1); }
+.prog-next { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+.invest-form { display: flex; gap: 8px; }
+.invest-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 10px; font-size: 14px; }
+.invest-input:focus { outline: none; border-color: var(--c2); }
+.invest-btn { background: var(--c2); color: #0a2e24; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 14px; white-space: nowrap; }
+.invest-btn:hover { background: #4fffc7; }
+
+.quick-btns { display: flex; gap: 8px; }
+.quick-btn { flex: 1; padding: 8px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; }
+.quick-btn:hover { border-color: var(--c2); color: var(--c2); }
+
+/* milestones */
+.milestones-zone { }
+.milestones-zone h3 { font-size: 14px; font-weight: 600; color: var(--muted); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 2px; }
+.milestone { display: flex; align-items: center; gap: 14px; padding: 14px; background: var(--surface2); border-radius: 12px; border: 1px solid var(--border); margin-bottom: 8px; transition: all 0.3s; position: relative; overflow: hidden; }
+.milestone.unlocked { border-color: var(--c2); }
+.milestone.unlocked::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c2); }
+.milestone.next-up { border-color: rgba(34,211,160,0.3); }
+.m-icon { font-size: 28px; width: 44px; text-align: center; flex-shrink: 0; }
+.m-info { flex: 1; }
+.m-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.m-pts { font-size: 12px; color: var(--muted); }
+.m-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 700; white-space: nowrap; }
+.m-badge.done { background: rgba(34,211,160,0.15); color: var(--c2); }
+.m-badge.locked { background: rgba(255,255,255,0.05); color: var(--muted); }
+.m-badge.next { background: rgba(34,211,160,0.25); color: var(--c2); }
+.m-val { font-size: 12px; color: var(--coin); font-weight: 700; margin-top: 2px; }
+
+/* ───────────────────────────────────────────
+   PANEL 3 – UPGRADE-SYSTEM
+─────────────────────────────────────────── */
+.p3-layout { display: grid; grid-template-columns: 1fr 1.2fr; gap: 32px; align-items: start; }
+
+.avatar-zone { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.avatar-frame { width: 160px; height: 160px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 80px; position: relative; transition: all 0.4s; border: 4px solid var(--border); }
+.avatar-frame.lvl1 { border-color: #555; background: #1a1a1a; }
+.avatar-frame.lvl3 { border-color: #4ade80; background: radial-gradient(circle, #0d2b0d, #1a1a1a); box-shadow: 0 0 20px rgba(74,222,128,0.3); }
+.avatar-frame.lvl5 { border-color: #60a5fa; background: radial-gradient(circle, #0d1b2b, #1a1a1a); box-shadow: 0 0 30px rgba(96,165,250,0.4); animation: pulse-blue 2s infinite; }
+.avatar-frame.lvl7 { border-color: #a78bfa; background: radial-gradient(circle, #1a0d2b, #1a1a1a); box-shadow: 0 0 40px rgba(167,139,250,0.5); animation: pulse-purple 2s infinite; }
+.avatar-frame.lvl10 { border-color: var(--coin); background: radial-gradient(circle, #2b1a0d, #1a1a1a); box-shadow: 0 0 50px rgba(245,200,66,0.6); animation: pulse-gold 1.5s infinite; }
+@keyframes pulse-blue { 0%,100%{box-shadow:0 0 30px rgba(96,165,250,0.4)} 50%{box-shadow:0 0 50px rgba(96,165,250,0.7)} }
+@keyframes pulse-purple { 0%,100%{box-shadow:0 0 40px rgba(167,139,250,0.5)} 50%{box-shadow:0 0 65px rgba(167,139,250,0.8)} }
+@keyframes pulse-gold { 0%,100%{box-shadow:0 0 50px rgba(245,200,66,0.6)} 50%{box-shadow:0 0 80px rgba(245,200,66,0.9)} }
+
+.avatar-level-badge { background: var(--c3); color: white; font-size: 13px; font-weight: 700; padding: 4px 16px; border-radius: 20px; }
+.avatar-title { font-size: 18px; font-weight: 700; color: var(--text); }
+.avatar-subtitle { font-size: 13px; color: var(--muted); text-align: center; }
+
+.upgrade-btn { width: 100%; padding: 14px; border-radius: 12px; background: var(--c3); color: white; border: none; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+.upgrade-btn:hover { background: #ff8c5a; }
+.upgrade-btn:disabled { opacity: 0.4; cursor: default; }
+.upgrade-cost { font-size: 12px; color: var(--coin); margin-top: 6px; text-align: center; }
+
+.xp-bar-wrap { width: 100%; }
+.xp-bar-header { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.xp-bar-track { height: 8px; background: rgba(255,107,53,0.15); border-radius: 4px; overflow: hidden; }
+.xp-bar-fill { height: 100%; background: var(--c3); border-radius: 4px; transition: width 0.5s cubic-bezier(.34,1.56,.64,1); }
+
+/* upgrade levels panel */
+.levels-zone { }
+.levels-zone h3 { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px; }
+.level-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface2); border-radius: 10px; border: 1px solid var(--border); margin-bottom: 7px; transition: all 0.3s; }
+.level-row.reached { border-color: var(--c3); }
+.level-row.current { border-color: var(--c3); background: rgba(255,107,53,0.08); }
+.level-row.current::before { content: '▶'; color: var(--c3); font-size: 10px; }
+.lv-num { font-size: 11px; color: var(--muted); width: 30px; text-align: center; font-weight: 700; }
+.lv-icon { font-size: 22px; width: 32px; text-align: center; }
+.lv-info { flex: 1; }
+.lv-name { font-size: 13px; font-weight: 600; }
+.lv-desc { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.lv-reward { font-size: 11px; color: var(--coin); font-weight: 700; }
+.lv-check { color: var(--c3); font-size: 16px; }
+.lv-lock { color: var(--muted); font-size: 14px; }
+
+/* TOAST */
+.toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 999; }
+.toast { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 12px 18px; border-radius: 10px; font-size: 14px; opacity: 0; transform: translateY(8px); transition: all 0.3s; pointer-events: none; max-width: 280px; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.c1 { border-color: var(--c1); }
+.toast.c2 { border-color: var(--c2); }
+.toast.c3 { border-color: var(--c3); }
+
+/* ───────────────────────────────────────────
+   PANEL 4 – LOOT-KISTE / INVENTAR
+─────────────────────────────────────────── */
+.p4-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+.p4-header h2 { font-size: 20px; font-weight: 700; }
+.p4-stats { display: flex; gap: 16px; }
+.p4-stat { background: var(--surface2); border-radius: 10px; padding: 10px 18px; text-align: center; border: 1px solid var(--border); }
+.p4-stat-num { font-size: 20px; font-weight: 700; color: var(--coin); }
+.p4-stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.p4-filters { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.filter-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.15s; }
+.filter-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+.filter-btn.active { background: rgba(245,200,66,0.15); border-color: var(--coin); color: var(--coin); }
+
+.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.inv-card { background: var(--surface2); border-radius: 12px; padding: 16px 12px; border: 1px solid var(--border); text-align: center; position: relative; transition: all 0.2s; cursor: default; }
+.inv-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.15); }
+.inv-card.rarity-standard { border-top: 2px solid #4a4a5a; }
+.inv-card.rarity-rare { border-top: 2px solid var(--c1); }
+.inv-card.rarity-epic { border-top: 2px solid var(--coin); }
+.inv-card.rarity-legendary { border-top: 2px solid var(--c2); box-shadow: 0 0 16px rgba(34,211,160,0.15); }
+.inv-card.source-kiste { }
+.inv-card.source-fortschritt { }
+.inv-card.source-upgrade { }
+.inv-emoji { font-size: 36px; margin-bottom: 8px; }
+.inv-name { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 4px; line-height: 1.3; }
+.inv-rarity-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.inv-rarity-tag.standard { color: #6a6a7a; }
+.inv-rarity-tag.rare { color: #a78bfa; }
+.inv-rarity-tag.epic { color: #f5c842; }
+.inv-rarity-tag.legendary { color: var(--c2); }
+.inv-val { font-size: 12px; color: var(--coin); font-weight: 700; }
+.inv-source { position: absolute; top: 8px; right: 8px; font-size: 11px; opacity: 0.5; }
+.inv-qty { position: absolute; top: 8px; left: 8px; background: rgba(255,255,255,0.1); border-radius: 6px; font-size: 10px; font-weight: 700; padding: 2px 6px; color: var(--muted); }
+
+.inv-empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+.inv-empty-icon { font-size: 56px; margin-bottom: 16px; }
+.inv-empty p { font-size: 15px; margin-bottom: 8px; color: var(--text); }
+.inv-empty span { font-size: 13px; }
+
+.loot-open-btn { display: block; margin: 20px auto 0; padding: 12px 32px; background: var(--coin); color: #1a0d00; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+.loot-open-btn:hover { background: #ffe066; }
+
+/* chest open overlay */
+.loot-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 500; align-items: center; justify-content: center; flex-direction: column; gap: 24px; }
+.loot-overlay.open { display: flex; }
+.loot-chest-big { font-size: 120px; animation: floatChest 1.5s ease-in-out infinite; }
+@keyframes floatChest { 0%,100%{transform:translateY(0) rotate(-3deg)} 50%{transform:translateY(-12px) rotate(3deg)} }
+.loot-overlay h2 { font-size: 24px; font-weight: 700; color: var(--text); }
+.loot-overlay p { font-size: 14px; color: var(--muted); }
+.loot-tap-btn { background: var(--coin); color: #1a0d00; border: none; padding: 14px 40px; border-radius: 14px; font-size: 17px; font-weight: 700; cursor: pointer; }
+.loot-tap-btn:hover { background: #ffe066; }
+
+@media (max-width: 700px) {
+  .tabs { margin: 20px 12px 0; }
+  .panels { margin: 0 12px 24px; padding: 20px 14px; }
+  .p1-layout, .p2-layout, .p3-layout { grid-template-columns: 1fr; }
+  .site-header { padding: 20px 16px 0; }
+  .inventory-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}
+</style>
+</head>
+<body>
+
+<div class="site-header">
+  <h1>GameLoop – Demo Suite</h1>
+  <p>Drei Engagement-Systeme im Vergleich</p>
+  <div class="balance-bar">
+    <span class="coin-icon">🪙</span>
+    <span class="balance-num" id="balance">1000</span>
+    <span class="balance-label">Coins</span>
+    <button class="refill-btn" onclick="refill()">+ 500 Coins</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active-1" onclick="switchTab(1)" id="tab1"><span class="tab-dot tab-dot-1"></span>Schatzkiste</div>
+  <div class="tab" onclick="switchTab(2)" id="tab2"><span class="tab-dot tab-dot-2"></span>Fortschrittsrad</div>
+  <div class="tab" onclick="switchTab(3)" id="tab3"><span class="tab-dot tab-dot-3"></span>Upgrade-System</div>
+  <div class="tab" onclick="switchTab(4)" id="tab4"><span class="tab-dot tab-dot-4"></span>Meine Loot-Kiste</div>
+</div>
+
+<div class="panels">
+
+  <!-- PANEL 1 -->
+  <div class="panel visible" id="panel1">
+    <div class="p1-layout">
+      <div class="chest-zone">
+        <div class="chest-visual" id="chestVisual" onclick="openChest()">
+          <div class="chest-img" id="chestEmoji">🎁</div>
+        </div>
+
+        <div class="chest-info">
+          <div class="chest-info-row"><span class="chest-info-label">Mindestwert</span><span class="chest-info-val" id="chest-min">–</span></div>
+          <div class="chest-info-row"><span class="chest-info-label">Maximalwert</span><span class="chest-info-val" id="chest-max">–</span></div>
+          <div class="chest-info-row"><span class="chest-info-label">Garantiert</span><span class="chest-info-val">= Einzahlungswert</span></div>
+        </div>
+
+        <p style="font-size:12px;color:var(--muted);text-align:center">Wähle eine Kistengröße:</p>
+        <div class="chest-selector">
+          <div class="chest-opt sel" onclick="selectChest(100,this)">100 🪙</div>
+          <div class="chest-opt" onclick="selectChest(250,this)">250 🪙</div>
+          <div class="chest-opt" onclick="selectChest(500,this)">500 🪙</div>
+          <div class="chest-opt" onclick="selectChest(1000,this)">1000 🪙</div>
+        </div>
+
+        <button class="chest-open-btn" id="chestBtn" onclick="openChest()">🎁 Kiste öffnen</button>
+      </div>
+
+      <div class="items-zone">
+        <h3>Enthaltene Items</h3>
+        <div class="items-grid" id="itemsGrid">
+          <div class="item-card hidden"><div class="item-emoji">❓</div><div class="item-name">???</div><div class="item-rarity">Unbekannt</div></div>
+          <div class="item-card hidden"><div class="item-emoji">❓</div><div class="item-name">???</div><div class="item-rarity">Unbekannt</div></div>
+          <div class="item-card hidden"><div class="item-emoji">❓</div><div class="item-name">???</div><div class="item-rarity">Unbekannt</div></div>
+          <div class="item-card hidden"><div class="item-emoji">❓</div><div class="item-name">???</div><div class="item-rarity">Unbekannt</div></div>
+        </div>
+        <div class="total-row" id="totalRow" style="opacity:0.3">
+          <span>Gesamtwert dieser Kiste</span>
+          <strong id="totalVal">–</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 2 -->
+  <div class="panel" id="panel2">
+    <div class="p2-layout">
+      <div class="progress-zone">
+        <div class="prog-total">
+          <div class="prog-total-num" id="progPoints">0</div>
+          <div class="prog-total-label">Gesammelte Punkte</div>
+        </div>
+
+        <div class="prog-bar-wrap">
+          <div class="prog-bar-header">
+            <span id="progBarLabel">Nächster Meilenstein</span>
+            <strong id="progBarPct">0%</strong>
+          </div>
+          <div class="prog-bar-track">
+            <div class="prog-bar-fill" id="progBarFill" style="width:0%"></div>
+          </div>
+          <div class="prog-next" id="progNext">Noch 100 Punkte bis zum ersten Meilenstein</div>
+        </div>
+
+        <div class="invest-form">
+          <input class="invest-input" type="number" id="investAmt" value="50" min="10" max="500" placeholder="Coins investieren">
+          <button class="invest-btn" onclick="invest()">Investieren →</button>
+        </div>
+
+        <div class="quick-btns">
+          <button class="quick-btn" onclick="setInvest(25)">25 🪙</button>
+          <button class="quick-btn" onclick="setInvest(50)">50 🪙</button>
+          <button class="quick-btn" onclick="setInvest(100)">100 🪙</button>
+          <button class="quick-btn" onclick="setInvest(200)">200 🪙</button>
+        </div>
+      </div>
+
+      <div class="milestones-zone">
+        <h3>Meilensteine</h3>
+        <div id="milestoneList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 3 -->
+  <div class="panel" id="panel3">
+    <div class="p3-layout">
+      <div class="avatar-zone">
+        <div class="avatar-frame lvl1" id="avatarFrame">
+          <span id="avatarEmoji">🧑</span>
+        </div>
+        <div class="avatar-level-badge" id="avatarLvlBadge">Level 1</div>
+        <div class="avatar-title" id="avatarTitle">Neuling</div>
+        <div class="avatar-subtitle" id="avatarSub">Starte deine Reise und schalte besondere Designs frei.</div>
+
+        <div class="xp-bar-wrap">
+          <div class="xp-bar-header">
+            <span>XP Fortschritt</span>
+            <span id="xpLabel">0 / 100 XP</span>
+          </div>
+          <div class="xp-bar-track">
+            <div class="xp-bar-fill" id="xpFill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <button class="upgrade-btn" id="upgradeBtn" onclick="doUpgrade()">⬆ Upgrade kaufen</button>
+        <div class="upgrade-cost" id="upgradeCost">Kostet 100 🪙 → schaltet Level 2 frei</div>
+      </div>
+
+      <div class="levels-zone">
+        <h3>Level-Pfad</h3>
+        <div id="levelList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 4 – LOOT-KISTE -->
+  <div class="panel" id="panel4">
+    <div class="p4-header">
+      <h2>🎒 Meine Loot-Kiste</h2>
+      <div class="p4-stats">
+        <div class="p4-stat"><div class="p4-stat-num" id="inv-total-items">0</div><div class="p4-stat-label">Items</div></div>
+        <div class="p4-stat"><div class="p4-stat-num" id="inv-total-val">0 🪙</div><div class="p4-stat-label">Gesamtwert</div></div>
+        <div class="p4-stat"><div class="p4-stat-num" id="inv-rare-count">0</div><div class="p4-stat-label">Selten+</div></div>
+      </div>
+    </div>
+
+    <div class="p4-filters">
+      <button class="filter-btn active" onclick="filterInv('alle',this)">Alle</button>
+      <button class="filter-btn" onclick="filterInv('standard',this)">Standard</button>
+      <button class="filter-btn" onclick="filterInv('rare',this)">Selten</button>
+      <button class="filter-btn" onclick="filterInv('epic',this)">Episch</button>
+      <button class="filter-btn" onclick="filterInv('legendary',this)">Legendär</button>
+      <button class="filter-btn" onclick="filterInv('kiste',this)">📦 Kiste</button>
+      <button class="filter-btn" onclick="filterInv('fortschritt',this)">🟢 Fortschritt</button>
+      <button class="filter-btn" onclick="filterInv('upgrade',this)">🔥 Upgrade</button>
+    </div>
+
+    <div class="inventory-grid" id="inventoryGrid">
+      <div class="inv-empty">
+        <div class="inv-empty-icon">🎒</div>
+        <p>Dein Inventar ist noch leer</p>
+        <span>Öffne Kisten, erreiche Meilensteine oder kaufe Upgrades, um Items zu sammeln.</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- LOOT-OVERLAY -->
+<div class="loot-overlay" id="lootOverlay">
+  <div class="loot-chest-big">🎁</div>
+  <h2 id="lootOverlayTitle">Neue Items erhalten!</h2>
+  <p id="lootOverlayDesc">Tippe, um deine Beute zu sehen</p>
+  <button class="loot-tap-btn" onclick="closeLootOverlay()">Beute ansehen →</button>
+</div>
+
+<script>
+let balance = 1000;
+let chestSize = 100;
+let progPoints = 0;
+let currentLevel = 1;
+let currentXP = 0;
+
+function refill() { balance += 500; updateBalance(); toast('+ 500 Coins aufgeladen 🪙', 'c1'); }
+function updateBalance() { document.getElementById('balance').textContent = balance.toLocaleString('de-DE'); }
+
+// ─── TABS ───
+function switchTab(n) {
+  [1,2,3,4].forEach(i => {
+    document.getElementById('panel'+i).classList.toggle('visible', i===n);
+    const t = document.getElementById('tab'+i);
+    t.className = 'tab' + (i===n ? ' active-'+i : '');
+  });
+  if (n === 4) renderInventory();
+}
+
+// ─── PANEL 1 ───
+const itemPool = [
+  { emoji:'🎨', name:'Avatar-Rahmen Rot', rarity:'Selten', rarityClass:'rare', pct:0.3 },
+  { emoji:'⚡', name:'Speed-Boost 3h', rarity:'Standard', rarityClass:'', pct:0.2 },
+  { emoji:'🏆', name:'Trophäen-Icon', rarity:'Episch', rarityClass:'epic', pct:0.1 },
+  { emoji:'🎵', name:'Profil-Soundeffekt', rarity:'Standard', rarityClass:'', pct:0.15 },
+  { emoji:'🌟', name:'Leuchtender Cursor', rarity:'Selten', rarityClass:'rare', pct:0.25 },
+  { emoji:'🎭', name:'Emoji-Pack XL', rarity:'Standard', rarityClass:'', pct:0.18 },
+  { emoji:'💎', name:'Diamant-Badge', rarity:'Episch', rarityClass:'epic', pct:0.07 },
+  { emoji:'🦋', name:'Animation: Schmetterling', rarity:'Selten', rarityClass:'rare', pct:0.2 },
+  { emoji:'🎪', name:'Banner-Hintergrund', rarity:'Standard', rarityClass:'', pct:0.22 },
+  { emoji:'🔥', name:'Flammen-Effekt', rarity:'Selten', rarityClass:'rare', pct:0.28 },
+];
+
+function selectChest(val, el) {
+  chestSize = val;
+  document.querySelectorAll('.chest-opt').forEach(e=>e.classList.remove('sel'));
+  el.classList.add('sel');
+  document.getElementById('chest-min').textContent = val + ' 🪙';
+  document.getElementById('chest-max').textContent = val + ' 🪙';
+  resetItems();
+}
+selectChest(100, document.querySelector('.chest-opt.sel'));
+
+function resetItems() {
+  document.getElementById('itemsGrid').innerHTML = [1,2,3,4].map(()=>`
+    <div class="item-card hidden"><div class="item-emoji">❓</div><div class="item-name">???</div><div class="item-rarity">Unbekannt</div></div>`).join('');
+  document.getElementById('totalRow').style.opacity = '0.3';
+  document.getElementById('totalVal').textContent = '–';
+  document.getElementById('chestEmoji').textContent = '🎁';
+}
+
+function openChest() {
+  if (balance < chestSize) { toast('Nicht genug Coins! 😅', ''); return; }
+  balance -= chestSize;
+  updateBalance();
+
+  const cv = document.getElementById('chestVisual');
+  cv.classList.add('shaking');
+  setTimeout(()=>{ cv.classList.remove('shaking'); cv.classList.add('opening'); }, 0);
+  setTimeout(()=>{ cv.classList.remove('opening'); document.getElementById('chestEmoji').textContent = '📦'; }, 600);
+
+  const numItems = 4;
+  const chosen = [];
+  for (let i=0; i<numItems; i++) {
+    chosen.push(itemPool[Math.floor(Math.random()*itemPool.length)]);
+  }
+  const vals = splitExact(chestSize, numItems);
+
+  const grid = document.getElementById('itemsGrid');
+  grid.innerHTML = chosen.map((item,i)=>`
+    <div class="item-card" style="animation-delay:${i*120}ms" id="icard${i}">
+      <div class="item-emoji">${item.emoji}</div>
+      <div class="item-name">${item.name}</div>
+      <div class="item-rarity ${item.rarityClass}">${item.rarity}</div>
+      <div class="item-val">${vals[i]} 🪙</div>
+    </div>`).join('');
+
+  setTimeout(()=>{
+    document.querySelectorAll('[id^=icard]').forEach((el,i)=>{
+      setTimeout(()=>el.classList.add('revealed'), i*120);
+    });
+    document.getElementById('totalRow').style.opacity = '1';
+    document.getElementById('totalVal').textContent = chestSize + ' 🪙 ✓';
+
+    // Add to inventory
+    chosen.forEach((item, i) => {
+      addToInventory({
+        emoji: item.emoji,
+        name: item.name,
+        rarity: item.rarityClass || 'standard',
+        rarityLabel: item.rarity,
+        val: vals[i],
+        source: 'kiste',
+        sourceIcon: '📦'
+      });
+    });
+    showLootOverlay(`${numItems} Items aus der Kiste erhalten!`, 'Wechsle zu „Meine Loot-Kiste" um alles zu sehen.');
+    toast(`📦 Kiste geöffnet! ${numItems} Items erhalten`, 'c1');
+  }, 200);
+}
+
+function splitExact(total, n) {
+  const parts = [];
+  let remaining = total;
+  for (let i=0; i<n-1; i++) {
+    const maxPart = remaining - (n - i - 1);
+    const minPart = 1;
+    const val = Math.floor(Math.random() * (maxPart - minPart + 1)) + minPart;
+    parts.push(val);
+    remaining -= val;
+  }
+  parts.push(remaining);
+  return parts.sort((a,b)=>b-a);
+}
+
+// ─── PANEL 2 ───
+const milestones = [
+  { pts: 100,  icon:'🎯', name:'Erster Schritt',        reward:'Avatar-Rahmen Bronze', val: 80 },
+  { pts: 250,  icon:'⚡', name:'Aufsteiger',             reward:'Speed-Boost 24h',     val: 180 },
+  { pts: 500,  icon:'🌟', name:'Sammler',                reward:'Exklusiver Skin',     val: 350 },
+  { pts: 800,  icon:'🎨', name:'Kunstkenner',            reward:'Animierter Cursor',   val: 500 },
+  { pts: 1200, icon:'💎', name:'Diamant-Status',         reward:'Diamant-Badge',       val: 900 },
+  { pts: 2000, icon:'🏆', name:'Legenden-Rang',          reward:'Legendärer Avatar',   val: 1600 },
+];
+
+function renderMilestones() {
+  const nextIdx = milestones.findIndex(m=>m.pts > progPoints);
+  document.getElementById('milestoneList').innerHTML = milestones.map((m,i)=>{
+    const done = m.pts <= progPoints;
+    const isNext = i === nextIdx;
+    return `<div class="milestone ${done?'unlocked':''} ${isNext?'next-up':''}">
+      <div class="m-icon">${m.icon}</div>
+      <div class="m-info">
+        <div class="m-name">${m.name}</div>
+        <div class="m-pts">${m.pts.toLocaleString('de-DE')} Punkte</div>
+        <div class="m-val">${m.reward} · ${m.val} 🪙</div>
+      </div>
+      <span class="m-badge ${done?'done':isNext?'next':'locked'}">${done?'✓ Erhalten':isNext?'Nächstes Ziel':'Gesperrt'}</span>
+    </div>`;
+  }).join('');
+}
+
+function updateProgressBar() {
+  const nextM = milestones.find(m=>m.pts > progPoints);
+  const prevM = milestones.slice().reverse().find(m=>m.pts <= progPoints);
+  const from = prevM ? prevM.pts : 0;
+  const to = nextM ? nextM.pts : milestones[milestones.length-1].pts;
+  const pct = nextM ? Math.round(((progPoints - from) / (to - from)) * 100) : 100;
+  document.getElementById('progBarFill').style.width = pct + '%';
+  document.getElementById('progBarPct').textContent = pct + '%';
+  document.getElementById('progPoints').textContent = progPoints.toLocaleString('de-DE');
+  document.getElementById('progBarLabel').textContent = nextM ? 'Nächster Meilenstein: ' + nextM.name : 'Alle Meilensteine erreicht! 🏆';
+  document.getElementById('progNext').textContent = nextM ? `Noch ${(nextM.pts - progPoints).toLocaleString('de-DE')} Punkte bis „${nextM.name}"` : '🎉 Alle Belohnungen freigeschaltet!';
+}
+
+function invest() {
+  const amt = parseInt(document.getElementById('investAmt').value) || 0;
+  if (amt < 1) return;
+  if (balance < amt) { toast('Nicht genug Coins!', ''); return; }
+  balance -= amt;
+  updateBalance();
+  const oldPoints = progPoints;
+  progPoints += amt;
+
+  milestones.forEach(m => {
+    if (m.pts > oldPoints && m.pts <= progPoints) {
+      setTimeout(()=>{
+        toast(`🎉 Meilenstein erreicht: ${m.name}! +${m.reward}`, 'c2');
+        addToInventory({
+          emoji: m.icon,
+          name: m.reward,
+          rarity: m.pts >= 1200 ? 'legendary' : m.pts >= 500 ? 'epic' : 'rare',
+          rarityLabel: m.pts >= 1200 ? 'Legendär' : m.pts >= 500 ? 'Episch' : 'Selten',
+          val: m.val,
+          source: 'fortschritt',
+          sourceIcon: '🟢'
+        });
+        showLootOverlay(`Meilenstein: ${m.name}!`, `${m.reward} wurde deiner Loot-Kiste hinzugefügt.`);
+      }, 300);
+    }
+  });
+
+  updateProgressBar();
+  renderMilestones();
+  toast(`+${amt} Punkte investiert 🟢`, 'c2');
+}
+
+function setInvest(n) { document.getElementById('investAmt').value = n; }
+
+renderMilestones();
+updateProgressBar();
+
+// ─── PANEL 3 ───
+const levels = [
+  { lv:1,  icon:'🧑',  name:'Neuling',        desc:'Dein Startpunkt',             reward:'',                 cost: 0   },
+  { lv:2,  icon:'😊',  name:'Einsteiger',      desc:'Basis-Profilbild',            reward:'+50 🪙 Bonus',    cost: 100 },
+  { lv:3,  icon:'🌿',  name:'Aufsteiger',      desc:'Grüner Rahmen freigeschaltet',reward:'Rahmen-Skin',      cost: 150 },
+  { lv:4,  icon:'🎭',  name:'Charakterkopf',   desc:'Auswählbare Emojis',          reward:'Emoji-Pack',       cost: 200 },
+  { lv:5,  icon:'⭐',  name:'Star-User',       desc:'Blauer Leuchtrahmen',         reward:'Leuchtrahmen',     cost: 250 },
+  { lv:6,  icon:'🔥',  name:'Flammen-Rang',    desc:'Flammen-Effekt im Profil',    reward:'Flammen-Skin',     cost: 300 },
+  { lv:7,  icon:'💎',  name:'Diamant-Rang',    desc:'Lila Premium-Aura',           reward:'Diamant-Badge',    cost: 400 },
+  { lv:8,  icon:'🚀',  name:'Rocket-Elite',    desc:'Exklusiver Hintergrund',      reward:'Hintergrund-Pack', cost: 500 },
+  { lv:9,  icon:'👑',  name:'Kronen-Rang',     desc:'Kronen-Animation',            reward:'Kronen-Effekt',    cost: 700 },
+  { lv:10, icon:'🌟',  name:'Legende',         desc:'Gold-Aura – höchster Status', reward:'Legendärer Titel', cost: 1000},
+];
+const frameClasses = ['lvl1','lvl1','lvl3','lvl3','lvl5','lvl5','lvl7','lvl7','lvl7','lvl10','lvl10'];
+
+function renderLevels() {
+  document.getElementById('levelList').innerHTML = levels.map(l=>{
+    const reached = l.lv <= currentLevel;
+    const isCurrent = l.lv === currentLevel;
+    return `<div class="level-row ${reached?'reached':''} ${isCurrent?'current':''}">
+      ${isCurrent?'':'<div class="lv-num">Lv${l.lv}</div>'}
+      <div class="lv-icon">${l.icon}</div>
+      <div class="lv-info">
+        <div class="lv-name">${l.name}</div>
+        <div class="lv-desc">${l.desc}</div>
+        ${l.reward?`<div class="lv-reward">🎁 ${l.reward}</div>`:''}
+      </div>
+      ${reached && !isCurrent ? '<span class="lv-check">✓</span>' : ''}
+      ${!reached ? `<span class="lv-lock">🔒 ${l.cost}🪙</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function updateAvatar() {
+  const lv = levels[currentLevel-1];
+  const next = levels[currentLevel] || null;
+  document.getElementById('avatarEmoji').textContent = lv.icon;
+  document.getElementById('avatarLvlBadge').textContent = 'Level ' + currentLevel;
+  document.getElementById('avatarTitle').textContent = lv.name;
+  document.getElementById('avatarSub').textContent = lv.desc;
+  document.getElementById('avatarFrame').className = 'avatar-frame ' + (frameClasses[currentLevel-1] || 'lvl1');
+  const xpPct = Math.round((currentXP / (next ? next.cost : 1)) * 100);
+  document.getElementById('xpFill').style.width = Math.min(xpPct, 100) + '%';
+  document.getElementById('xpLabel').textContent = currentXP + ' / ' + (next ? next.cost : '–') + ' XP';
+  if (next) {
+    document.getElementById('upgradeCost').textContent = `Kostet ${next.cost} 🪙 → schaltet Level ${next.lv} frei`;
+    document.getElementById('upgradeBtn').disabled = false;
+  } else {
+    document.getElementById('upgradeCost').textContent = '🏆 Maximales Level erreicht!';
+    document.getElementById('upgradeBtn').disabled = true;
+  }
+}
+
+function doUpgrade() {
+  const next = levels[currentLevel];
+  if (!next) return;
+  if (balance < next.cost) { toast('Nicht genug Coins für dieses Upgrade!', ''); return; }
+  balance -= next.cost;
+  updateBalance();
+  currentXP += next.cost;
+  currentLevel++;
+  updateAvatar();
+  renderLevels();
+  const lv = levels[currentLevel-1];
+  if (lv.reward) {
+    addToInventory({
+      emoji: lv.icon,
+      name: lv.reward,
+      rarity: currentLevel >= 9 ? 'legendary' : currentLevel >= 6 ? 'epic' : currentLevel >= 3 ? 'rare' : 'standard',
+      rarityLabel: currentLevel >= 9 ? 'Legendär' : currentLevel >= 6 ? 'Episch' : currentLevel >= 3 ? 'Selten' : 'Standard',
+      val: next.cost,
+      source: 'upgrade',
+      sourceIcon: '🔥'
+    });
+    showLootOverlay(`Level ${currentLevel}: ${lv.name}!`, `${lv.reward} wurde deiner Loot-Kiste hinzugefügt.`);
+  }
+  toast(`🎉 Level ${currentLevel} erreicht: ${lv.name}!`, 'c3');
+}
+
+renderLevels();
+updateAvatar();
+
+// ─── INVENTORY ───
+let inventory = [];
+let currentFilter = 'alle';
+
+function addToInventory(item) {
+  // Check for duplicates (stack by name)
+  const existing = inventory.find(i => i.name === item.name && i.source === item.source);
+  if (existing) { existing.qty = (existing.qty || 1) + 1; }
+  else { inventory.push({ ...item, qty: 1, id: Date.now() + Math.random() }); }
+  updateInvStats();
+}
+
+function updateInvStats() {
+  document.getElementById('inv-total-items').textContent = inventory.reduce((s,i)=>s+(i.qty||1),0);
+  document.getElementById('inv-total-val').textContent = inventory.reduce((s,i)=>s+i.val*(i.qty||1),0) + ' 🪙';
+  document.getElementById('inv-rare-count').textContent = inventory.filter(i=>['rare','epic','legendary'].includes(i.rarity)).reduce((s,i)=>s+(i.qty||1),0);
+}
+
+function filterInv(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderInventory();
+}
+
+function renderInventory() {
+  const grid = document.getElementById('inventoryGrid');
+  updateInvStats();
+  let filtered = inventory;
+  if (currentFilter === 'standard') filtered = inventory.filter(i=>i.rarity==='standard');
+  else if (currentFilter === 'rare') filtered = inventory.filter(i=>i.rarity==='rare');
+  else if (currentFilter === 'epic') filtered = inventory.filter(i=>i.rarity==='epic');
+  else if (currentFilter === 'legendary') filtered = inventory.filter(i=>i.rarity==='legendary');
+  else if (currentFilter === 'kiste') filtered = inventory.filter(i=>i.source==='kiste');
+  else if (currentFilter === 'fortschritt') filtered = inventory.filter(i=>i.source==='fortschritt');
+  else if (currentFilter === 'upgrade') filtered = inventory.filter(i=>i.source==='upgrade');
+
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="inv-empty" style="grid-column:1/-1">
+      <div class="inv-empty-icon">${currentFilter==='alle'?'🎒':'🔍'}</div>
+      <p>${currentFilter==='alle'?'Dein Inventar ist noch leer':'Keine Items in dieser Kategorie'}</p>
+      <span>${currentFilter==='alle'?'Öffne Kisten, erreiche Meilensteine oder kaufe Upgrades.':'Spiele in anderen Tabs, um Items dieser Art zu erhalten.'}</span>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(item => `
+    <div class="inv-card rarity-${item.rarity} source-${item.source}">
+      ${(item.qty||1) > 1 ? `<div class="inv-qty">×${item.qty}</div>` : ''}
+      <div class="inv-source" title="Quelle: ${item.source}">${item.sourceIcon}</div>
+      <div class="inv-emoji">${item.emoji}</div>
+      <div class="inv-name">${item.name}</div>
+      <div class="inv-rarity-tag ${item.rarity}">${item.rarityLabel}</div>
+      <div class="inv-val">${item.val} 🪙</div>
+    </div>`).join('');
+}
+
+function showLootOverlay(title, desc) {
+  document.getElementById('lootOverlayTitle').textContent = title;
+  document.getElementById('lootOverlayDesc').textContent = desc;
+  document.getElementById('lootOverlay').classList.add('open');
+}
+
+function closeLootOverlay() {
+  document.getElementById('lootOverlay').classList.remove('open');
+  switchTab(4);
+}
+
+// ─── TOAST ───
+function toast(msg, cls) {
+  const c = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast ' + (cls||'');
+  el.textContent = msg;
+  c.appendChild(el);
+  requestAnimationFrame(()=>{ requestAnimationFrame(()=>el.classList.add('show')); });
+  setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(), 300); }, 2800);
+}
+</script>
+</body>
+</html>
