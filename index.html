@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VaultRun – Das unified Loot-System</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #09090f;
+  --s1: #11121a;
+  --s2: #191b26;
+  --s3: #1f2133;
+  --border: rgba(255,255,255,0.06);
+  --border2: rgba(255,255,255,0.12);
+  --text: #eeeef5;
+  --muted: #6b6e82;
+  --coin: #f5c842;
+  --coin2: #7a6118;
+  --violet: #8b7aff;
+  --teal: #22d3a0;
+  --orange: #ff6b35;
+  --red: #ff4466;
+}
+
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+/* ── TOP BAR ── */
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; border-bottom: 1px solid var(--border); background: var(--s1); }
+.logo { font-size: 22px; font-weight: 800; letter-spacing: -1px; }
+.logo-v { color: var(--violet); }
+.logo-r { color: var(--text); }
+.balance-pill { display: flex; align-items: center; gap: 10px; background: var(--s2); border: 1px solid var(--border2); border-radius: 40px; padding: 8px 18px; }
+.balance-coin { font-size: 18px; }
+.balance-num { font-size: 18px; font-weight: 700; color: var(--coin); font-variant-numeric: tabular-nums; min-width: 60px; }
+.topup-btn { background: var(--coin2); color: var(--coin); border: none; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.topup-btn:hover { background: var(--coin); color: #1a0d00; }
+
+/* ── LAYOUT ── */
+.game-wrap { display: grid; grid-template-columns: 340px 1fr; min-height: calc(100vh - 61px); }
+
+/* ── LEFT PANEL ── */
+.left { background: var(--s1); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+
+.chest-section { padding: 28px 24px 20px; border-bottom: 1px solid var(--border); }
+.section-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+
+.chest-stage { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 20px; }
+.chest-icon { font-size: 88px; cursor: pointer; transition: transform 0.15s; filter: drop-shadow(0 0 28px rgba(139,122,255,0.35)); user-select: none; }
+.chest-icon:hover { transform: scale(1.06) rotate(-3deg); }
+.chest-icon.shaking { animation: cShake 0.45s ease; }
+.chest-icon.popping { animation: cPop 0.55s ease; }
+@keyframes cShake { 0%,100%{transform:rotate(0)} 18%{transform:rotate(-9deg) scale(1.06)} 36%{transform:rotate(9deg) scale(1.09)} 55%{transform:rotate(-6deg) scale(1.06)} 74%{transform:rotate(6deg)} }
+@keyframes cPop { 0%{transform:scale(1)} 25%{transform:scale(1.18) rotate(-4deg)} 55%{transform:scale(0.92) rotate(3deg)} 100%{transform:scale(1) rotate(0)} }
+
+.chest-label { font-size: 13px; color: var(--muted); }
+
+.size-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 14px; }
+.size-opt { padding: 10px 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--s2); color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 700; text-align: center; transition: all 0.15s; }
+.size-opt:hover { border-color: var(--violet); color: var(--violet); }
+.size-opt.sel { border-color: var(--violet); background: rgba(139,122,255,0.12); color: var(--violet); }
+.size-opt .opt-sub { font-size: 10px; font-weight: 400; color: var(--muted); margin-top: 2px; display: block; }
+.size-opt.sel .opt-sub { color: rgba(139,122,255,0.7); }
+
+.guarantee-box { background: var(--s2); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; border: 1px solid var(--border); }
+.guarantee-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+.guarantee-row .g-label { color: var(--muted); }
+.guarantee-row .g-val { color: var(--coin); font-weight: 700; }
+.guarantee-row .g-val.green { color: var(--teal); }
+
+.open-btn { width: 100%; padding: 14px; border-radius: 12px; background: var(--violet); border: none; color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.2s; letter-spacing: 0.3px; }
+.open-btn:hover { background: #a090ff; }
+.open-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* ── PROGRESS SECTION ── */
+.progress-section { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.xp-bars { display: flex; flex-direction: column; gap: 12px; }
+.xp-row { }
+.xp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.xp-name { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.xp-pts { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.xp-track { height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+.xp-fill { height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(.34,1.4,.64,1); }
+.xp-fill.v { background: var(--violet); }
+.xp-fill.t { background: var(--teal); }
+.xp-fill.o { background: var(--orange); }
+.xp-next { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+/* ── AVATAR SECTION ── */
+.avatar-section { padding: 20px 24px; flex: 1; }
+.avatar-display { display: flex; align-items: center; gap: 14px; }
+.avatar-ring { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; border: 2px solid var(--border2); transition: all 0.4s; flex-shrink: 0; }
+.avatar-ring.t1 { border-color: #444; background: #1a1a22; }
+.avatar-ring.t2 { border-color: #4ade80; background: #0a1a0a; box-shadow: 0 0 14px rgba(74,222,128,0.2); }
+.avatar-ring.t3 { border-color: #60a5fa; background: #080f1a; box-shadow: 0 0 18px rgba(96,165,250,0.3); animation: pblue 2s infinite; }
+.avatar-ring.t4 { border-color: var(--violet); background: #0f0814; box-shadow: 0 0 22px rgba(139,122,255,0.4); animation: pviolet 2s infinite; }
+.avatar-ring.t5 { border-color: var(--coin); background: #1a1000; box-shadow: 0 0 28px rgba(245,200,66,0.5); animation: pgold 1.6s infinite; }
+@keyframes pblue { 0%,100%{box-shadow:0 0 18px rgba(96,165,250,0.3)} 50%{box-shadow:0 0 32px rgba(96,165,250,0.6)} }
+@keyframes pviolet { 0%,100%{box-shadow:0 0 22px rgba(139,122,255,0.4)} 50%{box-shadow:0 0 40px rgba(139,122,255,0.7)} }
+@keyframes pgold { 0%,100%{box-shadow:0 0 28px rgba(245,200,66,0.5)} 50%{box-shadow:0 0 50px rgba(245,200,66,0.8)} }
+.avatar-info { flex: 1; }
+.avatar-name { font-size: 15px; font-weight: 700; }
+.avatar-title { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.avatar-lvl { font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 10px; margin-top: 6px; display: inline-block; background: rgba(139,122,255,0.15); color: var(--violet); }
+
+/* ── RIGHT PANEL ── */
+.right { display: flex; flex-direction: column; overflow: hidden; }
+
+/* results feed */
+.results-header { padding: 20px 28px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.results-header h2 { font-size: 16px; font-weight: 700; }
+.session-stats { display: flex; gap: 16px; }
+.ss { text-align: center; }
+.ss-num { font-size: 16px; font-weight: 700; color: var(--coin); }
+.ss-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+.feed { flex: 1; overflow-y: auto; padding: 20px 28px; display: flex; flex-direction: column; gap: 24px; }
+.feed::-webkit-scrollbar { width: 4px; }
+.feed::-webkit-scrollbar-track { background: transparent; }
+.feed::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* chest result block */
+.result-block { }
+.result-block-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.rb-badge { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 3px 10px; border-radius: 20px; }
+.rb-badge.chest { background: rgba(139,122,255,0.15); color: var(--violet); }
+.rb-badge.progress { background: rgba(34,211,160,0.15); color: var(--teal); }
+.rb-badge.upgrade { background: rgba(255,107,53,0.15); color: var(--orange); }
+.rb-divider { flex: 1; height: 1px; background: var(--border); }
+.rb-coins { font-size: 12px; color: var(--coin); font-weight: 700; }
+
+.items-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.loot-card { background: var(--s2); border-radius: 10px; padding: 12px 10px; border: 1px solid var(--border); text-align: center; animation: cardIn 0.35s ease both; position: relative; }
+.loot-card.rare { border-color: rgba(139,122,255,0.4); }
+.loot-card.epic { border-color: rgba(245,200,66,0.4); }
+.loot-card.legendary { border-color: var(--teal); box-shadow: 0 0 12px rgba(34,211,160,0.15); }
+@keyframes cardIn { from{opacity:0;transform:translateY(10px) scale(0.92)} to{opacity:1;transform:none} }
+.lc-emoji { font-size: 28px; margin-bottom: 6px; }
+.lc-name { font-size: 11px; font-weight: 600; color: var(--text); line-height: 1.3; margin-bottom: 4px; }
+.lc-rarity { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
+.lc-rarity.standard { color: var(--muted); }
+.lc-rarity.rare { color: #a78bfa; }
+.lc-rarity.epic { color: var(--coin); }
+.lc-rarity.legendary { color: var(--teal); }
+.lc-val { font-size: 12px; color: var(--coin); font-weight: 700; }
+.lc-source { position: absolute; top: 6px; right: 7px; font-size: 10px; opacity: 0.45; }
+
+/* bonus unlock banners */
+.unlock-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; border: 1px solid; animation: cardIn 0.4s ease both; }
+.unlock-banner.progress { background: rgba(34,211,160,0.06); border-color: rgba(34,211,160,0.25); }
+.unlock-banner.upgrade { background: rgba(255,107,53,0.06); border-color: rgba(255,107,53,0.25); }
+.ub-icon { font-size: 28px; flex-shrink: 0; }
+.ub-info { flex: 1; }
+.ub-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.ub-sub { font-size: 11px; color: var(--muted); }
+.ub-reward { text-align: right; flex-shrink: 0; }
+.ub-reward-name { font-size: 11px; font-weight: 700; }
+.ub-reward-val { font-size: 11px; color: var(--coin); font-weight: 700; }
+
+/* value summary row */
+.value-summary { background: var(--s2); border-radius: 10px; padding: 12px 16px; border: 1px solid var(--border); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.vs-item { text-align: center; flex: 1; min-width: 80px; }
+.vs-num { font-size: 16px; font-weight: 700; }
+.vs-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+.vs-divider { width: 1px; height: 32px; background: var(--border2); }
+.vs-eq { font-size: 18px; color: var(--teal); font-weight: 700; }
+
+/* inventory tab */
+.inv-tab-bar { display: flex; border-top: 1px solid var(--border); flex-shrink: 0; background: var(--s1); }
+.inv-tab { flex: 1; padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; border-top: 2px solid transparent; transition: all 0.2s; }
+.inv-tab:hover { color: var(--text); }
+.inv-tab.active { color: var(--coin); border-top-color: var(--coin); }
+
+.inventory-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+.inventory-panel.open { display: flex; }
+.feed-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.feed-panel.hidden { display: none; }
+
+.inv-filters { padding: 14px 28px; display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.f-btn { padding: 5px 12px; border-radius: 16px; border: 1px solid var(--border); background: var(--s2); color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; }
+.f-btn:hover { color: var(--text); }
+.f-btn.on { border-color: var(--coin); background: rgba(245,200,66,0.1); color: var(--coin); }
+
+.inv-grid { flex: 1; overflow-y: auto; padding: 20px 28px; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; align-content: start; }
+.inv-grid::-webkit-scrollbar { width: 4px; }
+.inv-grid::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+.inv-empty-state { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--muted); }
+.inv-empty-state .big { font-size: 48px; margin-bottom: 12px; }
+.inv-empty-state p { font-size: 14px; }
+
+/* empty feed state */
+.feed-empty { text-align: center; padding: 80px 40px; color: var(--muted); margin: auto; }
+.feed-empty .icon { font-size: 60px; margin-bottom: 20px; opacity: 0.5; }
+.feed-empty p { font-size: 16px; color: var(--text); margin-bottom: 8px; }
+.feed-empty span { font-size: 13px; }
+
+/* toast */
+.toasts { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 999; pointer-events: none; }
+.t { background: var(--s2); border: 1px solid var(--border2); color: var(--text); padding: 10px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transform: translateY(6px); transition: all 0.25s; max-width: 260px; }
+.t.in { opacity: 1; transform: none; }
+
+@media(max-width:800px){
+  .game-wrap { grid-template-columns: 1fr; }
+  .left { border-right: none; border-bottom: 1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo"><span class="logo-v">Vault</span><span class="logo-r">Run</span></div>
+  <div class="balance-pill">
+    <span class="balance-coin">🪙</span>
+    <span class="balance-num" id="bal">1000</span>
+    <span style="font-size:13px;color:var(--muted)">Coins</span>
+    <button class="topup-btn" onclick="topup()">+500</button>
+  </div>
+</div>
+
+<div class="game-wrap">
+
+  <!-- LEFT -->
+  <div class="left">
+
+    <!-- CHEST PICKER -->
+    <div class="chest-section">
+      <div class="section-label">Schatzkiste öffnen</div>
+      <div class="chest-stage">
+        <div class="chest-icon" id="chestIcon" onclick="buyChest()">🎁</div>
+        <div class="chest-label" id="chestLabel">Klicke zum Öffnen</div>
+      </div>
+
+      <div class="size-picker">
+        <div class="size-opt sel" onclick="pickSize(100,this)">100 🪙<span class="opt-sub">3 Items</span></div>
+        <div class="size-opt" onclick="pickSize(250,this)">250 🪙<span class="opt-sub">4 Items</span></div>
+        <div class="size-opt" onclick="pickSize(500,this)">500 🪙<span class="opt-sub">5 Items</span></div>
+        <div class="size-opt" onclick="pickSize(1000,this)">1000 🪙<span class="opt-sub">7 Items</span></div>
+      </div>
+
+      <div class="guarantee-box">
+        <div class="guarantee-row"><span class="g-label">Direktwert (Items)</span><span class="g-val" id="g-direct">–</span></div>
+        <div class="guarantee-row"><span class="g-label">Bonus (XP-Rewards)</span><span class="g-val green" id="g-bonus">–</span></div>
+        <div class="guarantee-row"><span class="g-label">Gesamtgarantie</span><span class="g-val" id="g-total">–</span></div>
+      </div>
+
+      <button class="open-btn" id="openBtn" onclick="buyChest()">🎁 Kiste öffnen</button>
+    </div>
+
+    <!-- XP BARS -->
+    <div class="progress-section">
+      <div class="section-label">Fortschritt</div>
+      <div class="xp-bars">
+        <div class="xp-row">
+          <div class="xp-header">
+            <span class="xp-name"><span style="color:var(--violet)">◆</span> Sammel-XP</span>
+            <span class="xp-pts" id="xp1-pts">0 / 100</span>
+          </div>
+          <div class="xp-track"><div class="xp-fill v" id="xp1-fill" style="width:0%"></div></div>
+          <div class="xp-next" id="xp1-next">Stufe 1 → Erstes Item-Bonus</div>
+        </div>
+        <div class="xp-row">
+          <div class="xp-header">
+            <span class="xp-name"><span style="color:var(--teal)">◆</span> Seltenheits-XP</span>
+            <span class="xp-pts" id="xp2-pts">0 / 150</span>
+          </div>
+          <div class="xp-track"><div class="xp-fill t" id="xp2-fill" style="width:0%"></div></div>
+          <div class="xp-next" id="xp2-next">Selten+ Items zählen doppelt</div>
+        </div>
+        <div class="xp-row">
+          <div class="xp-header">
+            <span class="xp-name"><span style="color:var(--orange)">◆</span> Ausgaben-XP</span>
+            <span class="xp-pts" id="xp3-pts">0 / 500</span>
+          </div>
+          <div class="xp-track"><div class="xp-fill o" id="xp3-fill" style="width:0%"></div></div>
+          <div class="xp-next" id="xp3-next">Nächstes Avatar-Upgrade</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AVATAR -->
+    <div class="avatar-section">
+      <div class="section-label">Dein Profil</div>
+      <div class="avatar-display">
+        <div class="avatar-ring t1" id="avatarRing"><span id="avatarEmoji">🧑</span></div>
+        <div class="avatar-info">
+          <div class="avatar-name" id="avatarName">Neuling</div>
+          <div class="avatar-title" id="avatarTitle">Starte deine erste Kiste</div>
+          <div class="avatar-lvl" id="avatarLvl">Level 1</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right">
+
+    <div class="results-header">
+      <h2>Ergebnis-Feed</h2>
+      <div class="session-stats">
+        <div class="ss"><div class="ss-num" id="ss-spent">0</div><div class="ss-label">Eingezahlt</div></div>
+        <div class="ss"><div class="ss-num" id="ss-value">0</div><div class="ss-label">Erhalten</div></div>
+        <div class="ss"><div class="ss-num" id="ss-items">0</div><div class="ss-label">Items</div></div>
+      </div>
+    </div>
+
+    <!-- FEED / INVENTORY TOGGLE -->
+    <div class="inv-tab-bar">
+      <div class="inv-tab active" id="tabFeed" onclick="showView('feed')">📋 Feed</div>
+      <div class="inv-tab" id="tabInv" onclick="showView('inv')">🎒 Inventar (<span id="invCount">0</span>)</div>
+    </div>
+
+    <!-- FEED PANEL -->
+    <div class="feed-panel" id="feedPanel">
+      <div class="feed" id="feed">
+        <div class="feed-empty">
+          <div class="icon">🎁</div>
+          <p>Noch keine Kiste geöffnet</p>
+          <span>Wähle eine Kistengröße links und öffne deine erste Kiste.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- INVENTORY PANEL -->
+    <div class="inventory-panel" id="invPanel">
+      <div class="inv-filters">
+        <button class="f-btn on" onclick="filterInv('all',this)">Alle</button>
+        <button class="f-btn" onclick="filterInv('standard',this)">Standard</button>
+        <button class="f-btn" onclick="filterInv('rare',this)">Selten</button>
+        <button class="f-btn" onclick="filterInv('epic',this)">Episch</button>
+        <button class="f-btn" onclick="filterInv('legendary',this)">Legendär</button>
+        <button class="f-btn" onclick="filterInv('chest',this)">📦 Kiste</button>
+        <button class="f-btn" onclick="filterInv('progress',this)">◆ XP-Bonus</button>
+        <button class="f-btn" onclick="filterInv('upgrade',this)">⬆ Upgrade</button>
+      </div>
+      <div class="inv-grid" id="invGrid"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────
+let balance = 1000;
+let chestSize = 100;
+let inventory = [];
+let invFilter = 'all';
+let sessionSpent = 0;
+let sessionValue = 0;
+let sessionItems = 0;
+
+// XP tracks: [current, thresholds per level]
+const xpTracks = [
+  { name:'Sammel-XP',     cur:0, levels:[100,200,350,550,800,1200,1800,2500] },
+  { name:'Seltenheits-XP',cur:0, levels:[150,300,500,800,1200,2000] },
+  { name:'Ausgaben-XP',   cur:0, levels:[500,1000,2000,4000,8000] },
+];
+
+const AVATAR_LEVELS = [
+  { lv:1,  emoji:'🧑',  name:'Neuling',       title:'Starte deine erste Kiste', ring:'t1' },
+  { lv:2,  emoji:'😊',  name:'Einsteiger',    title:'Erste Kiste geöffnet',     ring:'t1' },
+  { lv:3,  emoji:'🌿',  name:'Aufsteiger',    title:'Sammler mit Stil',          ring:'t2' },
+  { lv:4,  emoji:'🎭',  name:'Charakterkopf', title:'Kennt die Tricks',         ring:'t2' },
+  { lv:5,  emoji:'⭐',  name:'Star-Spieler',  title:'Leuchtrahmen freigesch.',  ring:'t3' },
+  { lv:6,  emoji:'🔥',  name:'Flammen-Rang',  title:'Flammen-Aura aktiv',       ring:'t3' },
+  { lv:7,  emoji:'💎',  name:'Diamant',       title:'Premium-Aura',             ring:'t4' },
+  { lv:8,  emoji:'🚀',  name:'Rocket-Elite',  title:'Elite-Hintergrund',        ring:'t4' },
+  { lv:9,  emoji:'👑',  name:'König',         title:'Kronen-Animation',         ring:'t4' },
+  { lv:10, emoji:'🌟',  name:'Legende',       title:'Gold-Aura – Maximaler Rang', ring:'t5' },
+];
+let avatarLevel = 1;
+
+// ── ITEM POOL ──────────────────────────────────────────────────────
+const ITEM_POOL = [
+  { emoji:'🎨', name:'Avatar-Rahmen Rubinrot',  rarity:'rare',     rarityLabel:'Selten',   xpBonus:2 },
+  { emoji:'⚡', name:'Speed-Effekt',            rarity:'standard', rarityLabel:'Standard', xpBonus:1 },
+  { emoji:'🏆', name:'Trophäen-Icon',           rarity:'epic',     rarityLabel:'Episch',   xpBonus:4 },
+  { emoji:'🎵', name:'Profil-Sound',            rarity:'standard', rarityLabel:'Standard', xpBonus:1 },
+  { emoji:'🌟', name:'Leuchtender Cursor',      rarity:'rare',     rarityLabel:'Selten',   xpBonus:2 },
+  { emoji:'🎭', name:'Emoji-Pack XL',           rarity:'standard', rarityLabel:'Standard', xpBonus:1 },
+  { emoji:'💎', name:'Diamant-Badge',           rarity:'epic',     rarityLabel:'Episch',   xpBonus:4 },
+  { emoji:'🦋', name:'Schmetterlingseffekt',    rarity:'rare',     rarityLabel:'Selten',   xpBonus:2 },
+  { emoji:'🔥', name:'Flammen-Aura',            rarity:'rare',     rarityLabel:'Selten',   xpBonus:2 },
+  { emoji:'🌈', name:'Regenbogen-Hintergrund',  rarity:'epic',     rarityLabel:'Episch',   xpBonus:4 },
+  { emoji:'🎪', name:'Banner-Hintergrund',      rarity:'standard', rarityLabel:'Standard', xpBonus:1 },
+  { emoji:'🚀', name:'Raketen-Animation',       rarity:'rare',     rarityLabel:'Selten',   xpBonus:2 },
+  { emoji:'👑', name:'Kronen-Effekt',           rarity:'legendary',rarityLabel:'Legendär', xpBonus:8 },
+  { emoji:'🌙', name:'Mond-Skin',              rarity:'rare',     rarityLabel:'Selten',   xpBonus:2 },
+  { emoji:'⚗️', name:'Alchemie-Badge',         rarity:'epic',     rarityLabel:'Episch',   xpBonus:4 },
+  { emoji:'🎯', name:'Präzisions-Cursor',      rarity:'standard', rarityLabel:'Standard', xpBonus:1 },
+];
+
+// Progress milestone rewards (for each XP track level-up)
+const PROGRESS_REWARDS = [
+  { emoji:'🎁', name:'Mystery-Sticker',       rarity:'standard', rarityLabel:'Standard', val:15 },
+  { emoji:'🔷', name:'Blauer Kristall',       rarity:'rare',     rarityLabel:'Selten',   val:40 },
+  { emoji:'✨', name:'Glitzer-Effekt',        rarity:'rare',     rarityLabel:'Selten',   val:50 },
+  { emoji:'🎆', name:'Feuerwerk-Skin',        rarity:'epic',     rarityLabel:'Episch',   val:80 },
+  { emoji:'🌀', name:'Wirbel-Animation',      rarity:'epic',     rarityLabel:'Episch',   val:100 },
+  { emoji:'🦅', name:'Adler-Banner',          rarity:'legendary',rarityLabel:'Legendär', val:200 },
+];
+
+const UPGRADE_REWARDS = [
+  { emoji:'😊', name:'Einsteiger-Badge',      rarity:'standard', rarityLabel:'Standard', val:20 },
+  { emoji:'🌿', name:'Natur-Rahmen',          rarity:'standard', rarityLabel:'Standard', val:30 },
+  { emoji:'⭐', name:'Stern-Effekt',          rarity:'rare',     rarityLabel:'Selten',   val:60 },
+  { emoji:'🔥', name:'Flammen-Badge',         rarity:'rare',     rarityLabel:'Selten',   val:80 },
+  { emoji:'💎', name:'Diamant-Aura',          rarity:'epic',     rarityLabel:'Episch',   val:120 },
+  { emoji:'🚀', name:'Raketen-Trail',         rarity:'epic',     rarityLabel:'Episch',   val:150 },
+  { emoji:'👑', name:'Königskrone',           rarity:'legendary',rarityLabel:'Legendär', val:220 },
+  { emoji:'🌟', name:'Legenden-Aura',         rarity:'legendary',rarityLabel:'Legendär', val:300 },
+];
+
+// ── HELPERS ────────────────────────────────────────────────────────
+function fmtCoins(n) { return n.toLocaleString('de-DE') + ' 🪙'; }
+function rand(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
+
+function splitSum(total, n) {
+  // Split total into n positive integers summing exactly to total
+  if (n === 1) return [total];
+  const parts = [];
+  let rem = total;
+  for (let i = 0; i < n-1; i++) {
+    const max = rem - (n - i - 1);
+    const val = Math.max(1, Math.floor(Math.random() * max * 0.6) + 1);
+    parts.push(val);
+    rem -= val;
+  }
+  parts.push(rem);
+  return parts.sort((a,b) => b-a);
+}
+
+function updateBalance() { document.getElementById('bal').textContent = balance.toLocaleString('de-DE'); }
+function topup() { balance += 500; updateBalance(); toast('+ 500 Coins gutgeschrieben 🪙'); }
+
+function updateSessionStats() {
+  document.getElementById('ss-spent').textContent = sessionSpent.toLocaleString('de-DE');
+  document.getElementById('ss-value').textContent = sessionValue.toLocaleString('de-DE');
+  document.getElementById('ss-items').textContent = sessionItems;
+}
+
+// ── CHEST SIZE ─────────────────────────────────────────────────────
+const CHEST_CONFIGS = {
+  100:  { items:3, directPct:0.78 },
+  250:  { directPct:0.76, items:4 },
+  500:  { directPct:0.74, items:5 },
+  1000: { directPct:0.72, items:7 },
+};
+
+function pickSize(val, el) {
+  chestSize = val;
+  document.querySelectorAll('.size-opt').forEach(e=>e.classList.remove('sel'));
+  el.classList.add('sel');
+  updateGuaranteeBox();
+}
+
+function updateGuaranteeBox() {
+  const cfg = CHEST_CONFIGS[chestSize];
+  const direct = Math.round(chestSize * cfg.directPct);
+  const bonus = chestSize - direct;
+  document.getElementById('g-direct').textContent = direct + ' 🪙';
+  document.getElementById('g-bonus').textContent = '~' + bonus + ' 🪙';
+  document.getElementById('g-total').textContent = chestSize + ' 🪙 ✓';
+}
+updateGuaranteeBox();
+
+// ── XP & AVATAR ────────────────────────────────────────────────────
+function addXP(trackIdx, amount) {
+  const track = xpTracks[trackIdx];
+  const levelsBefore = getCurrentXpLevel(track);
+  track.cur += amount;
+  const levelsAfter = getCurrentXpLevel(track);
+  return levelsAfter - levelsBefore; // how many levels gained
+}
+
+function getCurrentXpLevel(track) {
+  let lv = 0;
+  let cumulative = 0;
+  for (const threshold of track.levels) {
+    cumulative += threshold;
+    if (track.cur >= cumulative) lv++;
+    else break;
+  }
+  return lv;
+}
+
+function getXpProgress(track) {
+  let cumulative = 0;
+  for (let i = 0; i < track.levels.length; i++) {
+    const next = cumulative + track.levels[i];
+    if (track.cur < next) {
+      return { pct: Math.round(((track.cur - cumulative) / track.levels[i]) * 100), cur: track.cur - cumulative, needed: track.levels[i], level: i };
+    }
+    cumulative = next;
+  }
+  return { pct: 100, cur: 0, needed: 0, level: track.levels.length };
+}
+
+function renderXpBars() {
+  xpTracks.forEach((track, i) => {
+    const prog = getXpProgress(track);
+    const lv = getCurrentXpLevel(track);
+    const fillEl = document.getElementById(`xp${i+1}-fill`);
+    const ptsEl = document.getElementById(`xp${i+1}-pts`);
+    const nextEl = document.getElementById(`xp${i+1}-next`);
+    fillEl.style.width = prog.pct + '%';
+    if (prog.needed > 0) {
+      ptsEl.textContent = prog.cur + ' / ' + prog.needed;
+      nextEl.textContent = `Stufe ${lv+1} → noch ${prog.needed - prog.cur} XP`;
+    } else {
+      ptsEl.textContent = 'MAX';
+      nextEl.textContent = 'Maximale Stufe erreicht 🏆';
+    }
+  });
+}
+
+function computeAvatarLevel() {
+  // Avatar level based on Ausgaben-XP (track index 2)
+  const lv = Math.min(getCurrentXpLevel(xpTracks[2]) + 1, AVATAR_LEVELS.length);
+  return lv;
+}
+
+function renderAvatar(prevLevel) {
+  const lv = computeAvatarLevel();
+  if (lv === prevLevel) return null;
+  avatarLevel = lv;
+  const avData = AVATAR_LEVELS[lv - 1];
+  document.getElementById('avatarEmoji').textContent = avData.emoji;
+  document.getElementById('avatarName').textContent = avData.name;
+  document.getElementById('avatarTitle').textContent = avData.title;
+  document.getElementById('avatarLvl').textContent = 'Level ' + lv;
+  document.getElementById('avatarRing').className = 'avatar-ring ' + avData.ring;
+  return avData;
+}
+
+// ── BUY CHEST ──────────────────────────────────────────────────────
+function buyChest() {
+  if (balance < chestSize) { toast('Nicht genug Coins! 😅'); return; }
+  balance -= chestSize;
+  updateBalance();
+  sessionSpent += chestSize;
+
+  // Animate chest
+  const icon = document.getElementById('chestIcon');
+  icon.classList.add('shaking');
+  setTimeout(() => { icon.classList.remove('shaking'); icon.classList.add('popping'); }, 0);
+  setTimeout(() => { icon.classList.remove('popping'); }, 600);
+  document.getElementById('chestLabel').textContent = 'Geöffnet!';
+  setTimeout(() => { document.getElementById('chestLabel').textContent = 'Klicke zum Öffnen'; }, 1500);
+
+  // Build result
+  const cfg = CHEST_CONFIGS[chestSize];
+  const directBudget = Math.round(chestSize * cfg.directPct);
+  const bonusBudget = chestSize - directBudget;
+  const numItems = cfg.items;
+
+  // Pick items
+  const pickedItems = [];
+  for (let i = 0; i < numItems; i++) pickedItems.push({ ...rand(ITEM_POOL) });
+  const vals = splitSum(directBudget, numItems);
+  pickedItems.forEach((item, i) => { item.val = vals[i]; item.source = 'chest'; });
+
+  // Add to inventory
+  pickedItems.forEach(item => addToInventory(item));
+  sessionItems += numItems;
+  sessionValue += directBudget;
+
+  // XP gains from chest items
+  const prevAvatarLv = computeAvatarLevel();
+  const sammelLvGained = addXP(0, numItems * 10);
+  const rarityXp = pickedItems.reduce((s,it) => s + it.xpBonus * 15, 0);
+  const rarityLvGained = addXP(1, rarityXp);
+  const ausgabenLvGained = addXP(2, chestSize);
+
+  // Compute bonus items from XP level-ups
+  const bonusItems = [];
+  let remainingBonus = bonusBudget;
+
+  for (let g = 0; g < sammelLvGained && remainingBonus > 0; g++) {
+    const reward = { ...rand(PROGRESS_REWARDS), source: 'progress' };
+    reward.val = Math.min(reward.val, remainingBonus);
+    remainingBonus -= reward.val;
+    bonusItems.push({ type:'progress', item:reward, trackName:'Sammel-XP', level: getCurrentXpLevel(xpTracks[0]) });
+  }
+  for (let g = 0; g < rarityLvGained && remainingBonus > 0; g++) {
+    const reward = { ...rand(PROGRESS_REWARDS), source: 'progress' };
+    reward.val = Math.min(reward.val, remainingBonus);
+    remainingBonus -= reward.val;
+    bonusItems.push({ type:'progress', item:reward, trackName:'Seltenheits-XP', level: getCurrentXpLevel(xpTracks[1]) });
+  }
+
+  // Avatar upgrade bonus
+  const newAvatarData = renderAvatar(prevAvatarLv);
+  if (newAvatarData && remainingBonus > 0) {
+    const upgradeReward = { ...rand(UPGRADE_REWARDS), source: 'upgrade' };
+    upgradeReward.val = Math.min(upgradeReward.val, remainingBonus);
+    remainingBonus -= upgradeReward.val;
+    bonusItems.push({ type:'upgrade', item:upgradeReward, avatarName: newAvatarData.name, avatarLv: avatarLevel });
+  }
+
+  // If there's still remaining bonus budget (no level-ups occurred), distribute as small bonus items
+  if (remainingBonus > 0) {
+    // Give a small consolation item worth the remaining bonus
+    const consolation = { ...rand(PROGRESS_REWARDS), source: 'progress' };
+    consolation.val = remainingBonus;
+    bonusItems.push({ type:'progress', item:consolation, trackName:'Tages-Bonus', level:'–' });
+  }
+
+  // Add bonus items to inventory
+  bonusItems.forEach(b => { addToInventory(b.item); sessionValue += b.item.val; });
+
+  renderXpBars();
+  updateSessionStats();
+  renderInventoryGrid();
+
+  // Build feed block
+  buildFeedBlock(chestSize, pickedItems, bonusItems, directBudget);
+  showView('feed');
+  toast(`📦 ${numItems} Items • +${bonusItems.length} Bonus-Items!`);
+}
+
+// ── FEED ───────────────────────────────────────────────────────────
+function buildFeedBlock(spent, items, bonusItems, directVal) {
+  const feed = document.getElementById('feed');
+
+  // Remove empty state
+  const empty = feed.querySelector('.feed-empty');
+  if (empty) empty.remove();
+
+  const block = document.createElement('div');
+  block.className = 'result-block';
+
+  const bonusVal = bonusItems.reduce((s,b) => s + b.item.val, 0);
+  const totalVal = directVal + bonusVal;
+
+  // Chest items section
+  let html = `
+    <div class="result-block-header">
+      <span class="rb-badge chest">📦 Schatzkiste</span>
+      <div class="rb-divider"></div>
+      <span class="rb-coins">${fmtCoins(directVal)}</span>
+    </div>
+    <div class="items-row">`;
+  items.forEach((item, i) => {
+    html += `<div class="loot-card ${item.rarity}" style="animation-delay:${i*60}ms">
+      <div class="lc-source">📦</div>
+      <div class="lc-emoji">${item.emoji}</div>
+      <div class="lc-name">${item.name}</div>
+      <div class="lc-rarity ${item.rarity}">${item.rarityLabel}</div>
+      <div class="lc-val">${item.val} 🪙</div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  // Bonus blocks
+  bonusItems.forEach((b, i) => {
+    if (b.type === 'progress') {
+      html += `<div class="result-block-header" style="margin-top:14px">
+        <span class="rb-badge progress">◆ ${b.trackName}</span>
+        <div class="rb-divider"></div>
+        <span class="rb-coins">${fmtCoins(b.item.val)}</span>
+      </div>
+      <div class="unlock-banner progress" style="animation-delay:${200+i*80}ms">
+        <div class="ub-icon">${b.item.emoji}</div>
+        <div class="ub-info">
+          <div class="ub-title">Stufe ${b.level} freigeschaltet!</div>
+          <div class="ub-sub">Du hast einen neuen Meilenstein erreicht</div>
+        </div>
+        <div class="ub-reward">
+          <div class="ub-reward-name">${b.item.name}</div>
+          <div class="ub-reward-val">${b.item.val} 🪙</div>
+        </div>
+      </div>`;
+    } else if (b.type === 'upgrade') {
+      html += `<div class="result-block-header" style="margin-top:14px">
+        <span class="rb-badge upgrade">⬆ Avatar-Upgrade</span>
+        <div class="rb-divider"></div>
+        <span class="rb-coins">${fmtCoins(b.item.val)}</span>
+      </div>
+      <div class="unlock-banner upgrade" style="animation-delay:${200+i*80}ms">
+        <div class="ub-icon">${b.item.emoji}</div>
+        <div class="ub-info">
+          <div class="ub-title">Level ${b.avatarLv}: ${b.avatarName}!</div>
+          <div class="ub-sub">Dein Avatar wurde aufgewertet</div>
+        </div>
+        <div class="ub-reward">
+          <div class="ub-reward-name">${b.item.name}</div>
+          <div class="ub-reward-val">${b.item.val} 🪙</div>
+        </div>
+      </div>`;
+    }
+  });
+
+  // Value summary
+  html += `<div class="value-summary" style="margin-top:14px">
+    <div class="vs-item"><div class="vs-num" style="color:var(--red)">${fmtCoins(spent)}</div><div class="vs-label">Eingezahlt</div></div>
+    <div class="vs-divider"></div>
+    <div class="vs-item"><div class="vs-num">${fmtCoins(directVal)}</div><div class="vs-label">Item-Wert</div></div>
+    <div class="vs-divider"></div>
+    <div class="vs-item"><div class="vs-num" style="color:var(--teal)">${fmtCoins(bonusVal)}</div><div class="vs-label">XP-Bonus</div></div>
+    <div class="vs-divider"></div>
+    <div class="vs-eq">=</div>
+    <div class="vs-divider"></div>
+    <div class="vs-item"><div class="vs-num" style="color:var(--coin)">${fmtCoins(totalVal)}</div><div class="vs-label">Gesamtwert</div></div>
+  </div>`;
+
+  block.innerHTML = html;
+  feed.insertBefore(block, feed.firstChild);
+}
+
+// ── INVENTORY ──────────────────────────────────────────────────────
+function addToInventory(item) {
+  const existing = inventory.find(i => i.name === item.name && i.source === item.source);
+  if (existing) { existing.qty = (existing.qty || 1) + 1; }
+  else { inventory.push({ ...item, qty: 1 }); }
+  document.getElementById('invCount').textContent = inventory.reduce((s,i)=>s+(i.qty||1),0);
+}
+
+function filterInv(f, btn) {
+  invFilter = f;
+  document.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderInventoryGrid();
+}
+
+function renderInventoryGrid() {
+  const grid = document.getElementById('invGrid');
+  let list = inventory;
+  if (invFilter === 'standard')  list = inventory.filter(i=>i.rarity==='standard');
+  if (invFilter === 'rare')      list = inventory.filter(i=>i.rarity==='rare');
+  if (invFilter === 'epic')      list = inventory.filter(i=>i.rarity==='epic');
+  if (invFilter === 'legendary') list = inventory.filter(i=>i.rarity==='legendary');
+  if (invFilter === 'chest')     list = inventory.filter(i=>i.source==='chest');
+  if (invFilter === 'progress')  list = inventory.filter(i=>i.source==='progress');
+  if (invFilter === 'upgrade')   list = inventory.filter(i=>i.source==='upgrade');
+
+  if (!list.length) {
+    grid.innerHTML = `<div class="inv-empty-state"><div class="big">🎒</div><p>${invFilter==='all'?'Noch keine Items gesammelt':'Keine Items in dieser Kategorie'}</p></div>`;
+    return;
+  }
+  const srcIcon = { chest:'📦', progress:'◆', upgrade:'⬆' };
+  grid.innerHTML = list.map(item => `
+    <div class="loot-card ${item.rarity}" style="animation:none">
+      <div class="lc-source">${srcIcon[item.source]||''}</div>
+      ${(item.qty||1)>1?`<div style="position:absolute;top:6px;left:8px;font-size:10px;background:rgba(255,255,255,0.1);padding:1px 6px;border-radius:6px;color:var(--muted)">×${item.qty}</div>`:''}
+      <div class="lc-emoji">${item.emoji}</div>
+      <div class="lc-name">${item.name}</div>
+      <div class="lc-rarity ${item.rarity}">${item.rarityLabel}</div>
+      <div class="lc-val">${item.val} 🪙</div>
+    </div>`).join('');
+}
+
+// ── VIEWS ──────────────────────────────────────────────────────────
+function showView(v) {
+  document.getElementById('feedPanel').classList.toggle('hidden', v!=='feed');
+  document.getElementById('invPanel').classList.toggle('open', v==='inv');
+  document.getElementById('tabFeed').classList.toggle('active', v==='feed');
+  document.getElementById('tabInv').classList.toggle('active', v==='inv');
+  if (v==='inv') renderInventoryGrid();
+}
+
+// ── TOAST ──────────────────────────────────────────────────────────
+function toast(msg) {
+  const c = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 't';
+  el.textContent = msg;
+  c.appendChild(el);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('in')));
+  setTimeout(()=>{ el.classList.remove('in'); setTimeout(()=>el.remove(),300); }, 2600);
+}
+
+// ── INIT ───────────────────────────────────────────────────────────
+renderXpBars();
+</script>
+</body>
+</html>
